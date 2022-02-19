@@ -177,7 +177,7 @@ def clip_guided_diffusion(
             log['Saturation Loss'] = sat_losses.item()
             loss = loss + sat_losses
 
-        if init_tensor is not None and init_scale != 0:
+        if init_tensor is not None and init_lpips != 0:
             init_losses = lpips_vgg(x_in, init_tensor)
             init_losses = init_losses.sum() * init_lpips
             init_ssim = 1 - ssim(x_in, init_tensor)
