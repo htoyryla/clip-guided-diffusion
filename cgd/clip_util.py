@@ -7,6 +7,7 @@ import torchvision.transforms as tvt
 import torchvision.transforms.functional as tvf
 from data.imagenet1000_clsidx_to_labels import IMAGENET_CLASSES
 from PIL import Image
+import numpy as np
 
 from cgd import script_util
 from cgd.modules import MakeCutouts
@@ -56,10 +57,11 @@ def encode_image_prompt(image: str, weight: float, diffusion_size: int, num_cuto
     make_cutouts = MakeCutouts(cut_size=clip_size, num_cutouts=num_cutouts)
     pil_img = Image.open(script_util.fetch(image)).convert('RGB')
     smallest_side = min(diffusion_size, *pil_img.size)
-    pil_img = resize_right.resize(pil_img, out_shape=[smallest_side],
+    t_img = tvf.to_tensor(pil_img)
+    t_img = resize_right.resize(t_img, out_shape=(smallest_side, smallest_side),
                                   interp_method=lanczos3, support_sz=None,
                                   antialiasing=True, by_convs=False, scale_tolerance=None)
-    batch = make_cutouts(tvf.to_tensor(pil_img).unsqueeze(0).to(device))
+    batch = make_cutouts(t_img.unsqueeze(0).to(device))
     batch_embed = clip_model.encode_image(tf.normalize(batch)).float()
     batch_weight = [weight / make_cutouts.cutn] * make_cutouts.cutn
     return batch_embed, batch_weight
