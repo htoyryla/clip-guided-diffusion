@@ -12,6 +12,8 @@ from cgd import losses
 from cgd import clip_util
 from cgd import script_util
 
+from pytorch_msssim import ssim
+
 
 # Define necessary functions
 
@@ -129,7 +131,7 @@ def clip_guided_diffusion(
         dropout=dropout,
     )
     # This is initialized lazily as it can use a bit of VRAM
-    if init_tensor is not None and init_scale != 0:
+    if init_tensor is not None and init_lpips != 0:
         lpips_vgg = lpips.LPIPS(net='vgg').to(device)
     current_timestep = None
 
@@ -176,9 +178,12 @@ def clip_guided_diffusion(
 
         if init_tensor is not None and init_scale != 0:
             init_losses = lpips_vgg(x_in, init_tensor)
-            init_losses = init_losses.sum() * init_scale
+            init_losses = init_losses.sum() * init_lpips
+            init_ssim = 1 - ssim(x_in, init_tensor)
+            init_ssim = opt.init_ssim * init_ssim
             log['Init VGG Loss'] = init_losses.item()
-            loss = loss + init_losses
+            log['Init SSIM Loss'] = init_ssim.item()            
+            loss = loss + init_losses + init_ssim
 
         log['Total Loss'] = loss.item()
 
@@ -254,8 +259,10 @@ def main():
                    help="Diffusion image size. Must be one of [64, 128, 256, 512].")
     p.add_argument("--init_image", "-init", type=str, default='',
                    help="Blend an image with diffusion for n steps")
-    p.add_argument("--init_scale", "-is", type=int, default=0,
+    p.add_argument("--init_lpips", "-ilpips", type=int, default=0,
                    help="(optional) Perceptual loss scale for init image. ")
+    p.add_argument("--init_ssim", "-issim", type=int, default=0,
+                   help="(optional) Structural loss scale for init image. ")
     p.add_argument("--skip_timesteps", "-skip", type=int, default=0,
                    help="Number of timesteps to blend image for. CLIP guidance occurs after this.")
     p.add_argument("--prefix", "-dir", default="outputs",
@@ -325,7 +332,8 @@ def main():
         image_prompts=image_prompts,
         batch_size=args.batch_size,
         tv_scale=args.tv_scale,
-        init_scale=args.init_scale,
+        init_lpips=args.init_lpips,
+        init_ssim=args.init_ssim,
         range_scale=args.range_scale,
         sat_scale=args.sat_scale,
         image_size=args.image_size,
